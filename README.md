@@ -1,4 +1,5 @@
 # REIT Valuation Tool
+![App Interface](images/screenshot.png)
 
 A Python desktop application for multi-model REIT valuation, combining three methodologies simultaneously with scenario analysis, sensitivity tables, and Google Sheets database management.
 ---
