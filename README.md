@@ -120,6 +120,8 @@ NAV should carry more weight when the portfolio consists of readily appraised as
 - Margin of Safety (MoS) displays `—` when intrinsic price is negative or zero.
 - Cap rate sensitivity requires the NOI field to be populated.
 - Weights do not need to sum to 100 — the weighted average normalises automatically.
+- In DDM, to run a single-stage model set Stage 1 Growth = Stage 2 Terminal Growth for whichever scenario you want to treat as single-stage. (You can mix: e.g., use two-stage for best case and single-stage logic for worst case within the same calculation.)
+
 
 ---
 
