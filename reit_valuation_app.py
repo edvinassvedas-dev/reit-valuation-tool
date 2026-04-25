@@ -1,33 +1,22 @@
+import json
+import os
+import glob
+import subprocess
+import sys
 import FreeSimpleGUI as sg
-from google.oauth2.service_account import Credentials
-import gspread
 from datetime import date
 
-# ── Google Sheets setup ────────────────────────────────────────────────────────
 
-CREDENTIALS_PATH = 'credentials.json' #Google service account credentials file
-SPREADSHEET_NAME = 'DCF DB' #Replace with your spreadsheet file name
-SHEET_NAME = 'REIT DB' #Replace with your sheet name
+# ── Local database setup ───────────────────────────────────────────────────────
 
-scope = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
-]
-
-creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=scope)
-gc = gspread.authorize(creds)
+DB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reit_db")
+os.makedirs(DB_DIR, exist_ok=True)
 
 
-def get_worksheet():
-    try:
-        return gc.open(SPREADSHEET_NAME).worksheet(SHEET_NAME)
-    except gspread.SpreadsheetNotFound:
-        sg.popup_error(f"Spreadsheet '{SPREADSHEET_NAME}' not found!")
-    except gspread.WorksheetNotFound:
-        sg.popup_error(f"Sheet '{SHEET_NAME}' not found in '{SPREADSHEET_NAME}'!")
-    except Exception as e:
-        sg.popup_error(f"Error accessing spreadsheet: {e}")
-    return None
+def _analysis_path(name: str) -> str:
+    """Return the file path for a given analysis name."""
+    safe = "".join(c if c.isalnum() or c in "-_ " else "_" for c in name)
+    return os.path.join(DB_DIR, f"{safe}.json")
 
 
 # ── Model logic ────────────────────────────────────────────────────────────────
@@ -110,91 +99,115 @@ def weighted_avg(ddm_p, affo_p, nav_p, w_ddm, w_affo, w_nav):
 
 # ── Database helpers ───────────────────────────────────────────────────────────
 
-HEADER = [
-    "analysis_name", "shares", "market_price",
-    "dps", "ddm_stage1_years",
-    "ddm_worst_growth",    "ddm_worst_terminal",    "ddm_worst_rate",
-    "ddm_base_growth",     "ddm_base_terminal",     "ddm_base_rate",
-    "ddm_best_growth",     "ddm_best_terminal",     "ddm_best_rate",
-    "affo", "affo_debt", "affo_cash", "affo_years",
-    "affo_worst_growth",  "affo_worst_wacc",  "affo_worst_terminal",
-    "affo_base_growth",   "affo_base_wacc",   "affo_base_terminal",
-    "affo_best_growth",   "affo_best_wacc",   "affo_best_terminal",
-    "gav", "nav_debt", "nav_other", "noi",
-    "w_ddm", "w_affo", "w_nav",
-    "notes", "analysis_date",
-]
+_META = {
+    "_meta": {
+        "analysis_name":       "User-defined label for this analysis",
+        "shares":              "Diluted shares outstanding in millions",
+        "market_price":        "Current market price per share in dollars — optional, enables MoS and upside display",
+        "dps":                 "Annual dividend per share in dollars",
+        "ddm_stage1_years":    "Number of years for Stage 1 high-growth phase (typically 5–10)",
+        "ddm_*_growth":        "Stage 1 dividend growth rate as a percentage (e.g. 4 means 4%)",
+        "ddm_*_terminal":      "Stage 2 perpetual growth rate as a percentage — must be less than discount rate",
+        "ddm_*_rate":          "Discount rate (required return) as a percentage",
+        "affo":                "Adjusted Funds From Operations in millions",
+        "affo_debt":           "Total debt in millions (for AFFO DCF equity bridge)",
+        "affo_cash":           "Cash and equivalents in millions (for AFFO DCF equity bridge)",
+        "affo_years":          "Projection horizon in years for AFFO DCF (typically 10)",
+        "affo_*_growth":       "AFFO growth rate as a percentage",
+        "affo_*_wacc":         "Weighted average cost of capital as a percentage — must exceed terminal growth",
+        "affo_*_terminal":     "Terminal growth rate as a percentage",
+        "gav":                 "Gross Asset Value in millions — total property portfolio at market value",
+        "nav_debt":            "Total debt in millions (for NAV calculation)",
+        "nav_other":           "Other liabilities in millions — use 0 if none",
+        "noi":                 "Net Operating Income in millions — optional, enables cap rate sensitivity table",
+        "w_ddm":               "Weight for DDM in weighted average — w_ddm + w_affo + w_nav should sum to 100",
+        "w_affo":              "Weight for AFFO DCF in weighted average",
+        "w_nav":               "Weight for NAV in weighted average",
+        "notes":               "Free-text notes",
+        "analysis_date":       "Date the analysis was saved — set automatically, format YYYY-MM-DD",
+    }
+}
 
 
 def load_database():
-    worksheet = get_worksheet()
-    if not worksheet:
-        return [], []
-    try:
-        data = worksheet.get_all_values()
-        if not data or len(data) < 2:
-            return [], []
-        header = data[0]
-        database = [dict(zip(header, row)) for row in data[1:]]
-        names = [a.get("analysis_name", "N/A") for a in database]
-        return database, names
-    except Exception as e:
-        sg.popup_error(f"Error loading database: {e}")
-        return [], []
+    """Load all analyses from the reit_db directory. Keys starting with '_' are ignored."""
+    files = sorted(glob.glob(os.path.join(DB_DIR, "*.json")))
+    database = []
+    for filepath in files:
+        try:
+            with open(filepath, "r", encoding="utf-8") as fh:
+                raw = json.load(fh)
+            # Strip meta/comment keys so they never reach the GUI
+            record = {k: v for k, v in raw.items() if not k.startswith("_")}
+            database.append(record)
+        except Exception:
+            pass  # skip corrupt or unreadable files silently
+    names = [a.get("analysis_name", "N/A") for a in database]
+    return database, names
 
 
 def save_analysis(analysis_name, values):
-    worksheet = get_worksheet()
-    if not worksheet:
-        return
+    """Save a single analysis as an individual JSON file in reit_db/."""
+    def g(k): return values.get(k, "")
+    record = {
+        "analysis_name":       analysis_name,
+        "shares":              g("-SHARES-"),
+        "market_price":        g("-MARKET_PRICE-"),
+        "dps":                 g("-DPS-"),
+        "ddm_stage1_years":    g("-DDM_STAGE1_YEARS-"),
+        "ddm_worst_growth":    g("-DDM_WORST_GROWTH-"),
+        "ddm_worst_terminal":  g("-DDM_WORST_TERMINAL-"),
+        "ddm_worst_rate":      g("-DDM_WORST_RATE-"),
+        "ddm_base_growth":     g("-DDM_BASE_GROWTH-"),
+        "ddm_base_terminal":   g("-DDM_BASE_TERMINAL-"),
+        "ddm_base_rate":       g("-DDM_BASE_RATE-"),
+        "ddm_best_growth":     g("-DDM_BEST_GROWTH-"),
+        "ddm_best_terminal":   g("-DDM_BEST_TERMINAL-"),
+        "ddm_best_rate":       g("-DDM_BEST_RATE-"),
+        "affo":                g("-AFFO-"),
+        "affo_debt":           g("-AFFO_DEBT-"),
+        "affo_cash":           g("-AFFO_CASH-"),
+        "affo_years":          g("-AFFO_YEARS-"),
+        "affo_worst_growth":   g("-AFFO_WORST_GROWTH-"),
+        "affo_worst_wacc":     g("-AFFO_WORST_WACC-"),
+        "affo_worst_terminal": g("-AFFO_WORST_TERMINAL-"),
+        "affo_base_growth":    g("-AFFO_BASE_GROWTH-"),
+        "affo_base_wacc":      g("-AFFO_BASE_WACC-"),
+        "affo_base_terminal":  g("-AFFO_BASE_TERMINAL-"),
+        "affo_best_growth":    g("-AFFO_BEST_GROWTH-"),
+        "affo_best_wacc":      g("-AFFO_BEST_WACC-"),
+        "affo_best_terminal":  g("-AFFO_BEST_TERMINAL-"),
+        "gav":                 g("-GAV-"),
+        "nav_debt":            g("-NAV_DEBT-"),
+        "nav_other":           g("-NAV_OTHER-"),
+        "noi":                 g("-NOI-"),
+        "w_ddm":               g("-W_DDM-"),
+        "w_affo":              g("-W_AFFO-"),
+        "w_nav":               g("-W_NAV-"),
+        "notes":               g("-NOTES-").strip(),
+        "analysis_date":       date.today().strftime("%Y-%m-%d"),
+        **_META,
+    }
     try:
-        all_rows = worksheet.get_all_values()
-        if not all_rows:
-            worksheet.update(values=[HEADER], range_name="A1")
-            next_row = 2
-        else:
-            if all_rows[0] != HEADER:
-                worksheet.update(values=[HEADER], range_name="A1")
-            next_row = len(all_rows) + 1
-
-        def g(k): return values.get(k, "")
-
-        row = [
-            analysis_name,            g("-SHARES-"),            g("-MARKET_PRICE-"),
-            g("-DPS-"),               g("-DDM_STAGE1_YEARS-"),
-            g("-DDM_WORST_GROWTH-"),  g("-DDM_WORST_TERMINAL-"), g("-DDM_WORST_RATE-"),
-            g("-DDM_BASE_GROWTH-"),   g("-DDM_BASE_TERMINAL-"),  g("-DDM_BASE_RATE-"),
-            g("-DDM_BEST_GROWTH-"),   g("-DDM_BEST_TERMINAL-"),  g("-DDM_BEST_RATE-"),
-            g("-AFFO-"),              g("-AFFO_DEBT-"),          g("-AFFO_CASH-"),   g("-AFFO_YEARS-"),
-            g("-AFFO_WORST_GROWTH-"), g("-AFFO_WORST_WACC-"),   g("-AFFO_WORST_TERMINAL-"),
-            g("-AFFO_BASE_GROWTH-"),  g("-AFFO_BASE_WACC-"),    g("-AFFO_BASE_TERMINAL-"),
-            g("-AFFO_BEST_GROWTH-"),  g("-AFFO_BEST_WACC-"),    g("-AFFO_BEST_TERMINAL-"),
-            g("-GAV-"),               g("-NAV_DEBT-"),           g("-NAV_OTHER-"),   g("-NOI-"),
-            g("-W_DDM-"),             g("-W_AFFO-"),             g("-W_NAV-"),
-            g("-NOTES-").strip(),
-            date.today().strftime("%Y-%m-%d"),
-        ]
-        worksheet.add_rows(1)
-        worksheet.update(values=[row], range_name=f"A{next_row}")
+        with open(_analysis_path(analysis_name), "w", encoding="utf-8") as fh:
+            json.dump(record, fh, indent=2)
         sg.popup("Analysis saved successfully!")
     except Exception as e:
-        sg.popup_error(f"Error saving: {e}")
+        sg.popup_error(f"Error saving analysis: {e}")
 
 
 def delete_analysis(analysis_name):
-    worksheet = get_worksheet()
-    if not worksheet:
-        return False
-    try:
-        cell = worksheet.find(analysis_name)
-        if cell:
-            worksheet.delete_rows(cell.row)
+    """Delete the JSON file for a given analysis name."""
+    path = _analysis_path(analysis_name)
+    if os.path.exists(path):
+        try:
+            os.remove(path)
             return True
-        sg.popup_error(f"Analysis '{analysis_name}' not found.")
-        return False
-    except Exception as e:
-        sg.popup_error(f"Error deleting analysis: {e}")
-        return False
+        except Exception as e:
+            sg.popup_error(f"Error deleting analysis: {e}")
+            return False
+    sg.popup_error(f"Analysis '{analysis_name}' not found.")
+    return False
 
 
 # ── Default values ─────────────────────────────────────────────────────────────
@@ -275,18 +288,22 @@ def col_header():
     ]
 
 
-# ── Shared inputs ──
-shared_left = [
+# ── Shared inputs (single top row) ──
+shared_top = [
     [sg.Text("REIT Valuation", font=("Helvetica", 16, "bold"), text_color="#0079d3")],
-    [sg.Text("Analysis Name:",                size=(28, 1)), sg.InputText(key="-ANALYSIS_NAME-", size=(35, 1))],
-    [sg.Text("Shares Outstanding (millions):", size=(28, 1)), sg.InputText("", key="-SHARES-",       size=(INP, 1)),
-     sg.Text("  Market Price:",               size=(14, 1)), sg.InputText("", key="-MARKET_PRICE-", size=(INP, 1))],
+    [sg.Text("Analysis Name:", size=(14, 1)),
+     sg.InputText(key="-ANALYSIS_NAME-", size=(45, 1)),
+     sg.VerticalSeparator(),
+     sg.Text(" Shares Outstanding (M):", size=(20, 1)),
+     sg.InputText("", key="-SHARES-", size=(INP, 1)),
+     sg.Text("  Market Price:", size=(12, 1)),
+     sg.InputText("", key="-MARKET_PRICE-", size=(INP, 1))],
 ]
 
 # ── Notes ──
 notes_col = [
     [sg.Text("Notes", font=("Helvetica", 11, "bold"))],
-    [sg.Multiline(key="-NOTES-", size=(80, 4))],
+    [sg.Multiline(key="-NOTES-", size=(37, 15))],
 ]
 
 # ── Model 1: Two-stage DDM ──
@@ -460,47 +477,28 @@ summary_row_layout = [
 
 # ── Action buttons ──
 action_col = [
-    [sg.Button("Calculate")],
+    [sg.Button("Calculate", button_color=("white", "#27AE60"))],
     [sg.Button("Save Analysis")],
     [sg.Button("Reset",      button_color=("white", "#999999"))],
-]
-
-# ── Weighting notes ──
-weighting_notes_col = [
-    [sg.Text("Weighting Guide", font=("Helvetica", 11, "bold"))],
-    [sg.Text("Weights control the Wtd Avg in Summary.", font=("Helvetica", 9), text_color="#444444")],
-    [sg.Text("Adjust based on REIT type:", font=("Helvetica", 9), text_color="#444444")],
-    [sg.Text("")],
-    [sg.Text("Property-heavy REITs", font=("Helvetica", 9, "bold"))],
-    [sg.Text("NAV should carry more weight.", font=("Helvetica", 9), text_color="#444444")],
-    [sg.Text("GAV reflects underlying asset value.", font=("Helvetica", 9), text_color="#444444")],
-    [sg.Text("")],
-    [sg.Text("Dividend-focused REITs", font=("Helvetica", 9, "bold"))],
-    [sg.Text("DDM deserves more weight.", font=("Helvetica", 9), text_color="#444444")],
-    [sg.Text("Dividend sustainability and growth", font=("Helvetica", 9), text_color="#444444")],
-    [sg.Text("are the primary value drivers.", font=("Helvetica", 9), text_color="#444444")],
-    [sg.Text("")],
-    [sg.Text("Balanced approach", font=("Helvetica", 9, "bold"))],
-    [sg.Text("Equal weights (33/34/33) work when", font=("Helvetica", 9), text_color="#444444")],
-    [sg.Text("all three models are well supported.", font=("Helvetica", 9), text_color="#444444")],
 ]
 
 # ── Saved Analyses ──
 saved_col = [
     [sg.Text("Saved Analyses", font=("Helvetica", 11, "bold"))],
-    [sg.Listbox(values=[], key="-ANALYSIS_LIST-", size=(70, 11), enable_events=True)],
+    [sg.Listbox(values=[], key="-ANALYSIS_LIST-", size=(50, 12), enable_events=True)],
     [
         sg.Button("Load Selected",   disabled=True, key="-LOAD_SELECTED-"),
-        sg.Button("Delete Selected", disabled=True, key="-DELETE_SELECTED-"),
-        sg.Button("Reload Database"),
+        sg.Button("Delete Selected", button_color=("white", "#C0392B"), disabled=True, key="-DELETE_SELECTED-"), 
+        sg.Button("Reload DB"),
+    ],
+    [
+        sg.Button("Open File",       disabled=True, key="-OPEN_FILE-"),
     ],
 ]
 
 layout = [
     [
-        sg.Column(shared_left, vertical_alignment="top"),
-        sg.VerticalSeparator(),
-        sg.Column(notes_col, vertical_alignment="top", pad=((12, 0), 0)),
+        sg.Column(shared_top, vertical_alignment="top"),
     ],
     [sg.HorizontalSeparator()],
     [
@@ -516,19 +514,20 @@ layout = [
         sg.VerticalSeparator(),
         sg.Column(summary_row_layout, vertical_alignment="top", pad=((12, 12), 0)),
         sg.VerticalSeparator(),
-        sg.Column(weighting_notes_col, vertical_alignment="top", pad=((12, 12), 0)),
+        sg.Column(notes_col,          vertical_alignment="top", pad=((12, 12), 0)),
         sg.VerticalSeparator(),
         sg.Column(saved_col,          vertical_alignment="top", pad=((12, 0), 0)),
     ],
 ]
 
-window = sg.Window("REIT Valuation", layout, size=(1300, 800), resizable=True, finalize=True)
+window = sg.Window("REIT Valuation", layout, size=(1300, 790), resizable=True, finalize=True)
 
 loaded_database, analysis_names = load_database()
 window["-ANALYSIS_LIST-"].update(values=analysis_names)
 has_items = bool(analysis_names)
 window["-LOAD_SELECTED-"].update(disabled=not has_items)
 window["-DELETE_SELECTED-"].update(disabled=not has_items)
+window["-OPEN_FILE-"].update(disabled=not has_items)
 
 # ── Event loop ─────────────────────────────────────────────────────────────────
 
@@ -686,7 +685,6 @@ while True:
                     window[pk].update(f"${price:.2f}")
                     if market_price:
                         u = upside_pct(price, market_price)
-                        m = mos(price, market_price)
                         c = "green" if u > 0 else "red"
                         window[uk].update(f"{u:+.1f}%", text_color=c)
                     else:
@@ -706,7 +704,6 @@ while True:
                 update_sum_cell(f"-SUM_{sc_label}_NAV-",  f"-SUM_{sc_label}_NAV_U-",  nav_p)
                 update_sum_cell(f"-SUM_{sc_label}_WAVG-", f"-SUM_{sc_label}_WAVG_U-", wavg_p)
 
-
         except ValueError as e:
             sg.popup_error(f"Input error: {e}")
 
@@ -716,7 +713,7 @@ while True:
         if not name:
             sg.popup_error("Please enter an analysis name.")
         else:
-            exists = any(a.get("analysis_name") == name for a in loaded_database)
+            exists = os.path.exists(_analysis_path(name))
             if exists:
                 new_name = sg.popup_get_text(
                     f"'{name}' already exists. Enter a new name:", title="Rename")
@@ -731,18 +728,20 @@ while True:
                 window["-ANALYSIS_LIST-"].update(values=analysis_names)
 
     # ── Reload ─────────────────────────────────────────────────────────────────
-    elif event == "Reload Database":
+    elif event == "Reload DB":
         loaded_database, analysis_names = load_database()
         window["-ANALYSIS_LIST-"].update(values=analysis_names)
         has_items = bool(analysis_names)
         window["-LOAD_SELECTED-"].update(disabled=not has_items)
         window["-DELETE_SELECTED-"].update(disabled=not has_items)
+        window["-OPEN_FILE-"].update(disabled=not has_items)
 
     # ── List selection ─────────────────────────────────────────────────────────
     elif event == "-ANALYSIS_LIST-":
         selected = bool(values["-ANALYSIS_LIST-"])
         window["-LOAD_SELECTED-"].update(disabled=not selected)
         window["-DELETE_SELECTED-"].update(disabled=not selected)
+        window["-OPEN_FILE-"].update(disabled=not selected)
 
     # ── Load selected ──────────────────────────────────────────────────────────
     elif event == "-LOAD_SELECTED-":
@@ -805,6 +804,25 @@ while True:
                     has_items = bool(analysis_names)
                     window["-LOAD_SELECTED-"].update(disabled=not has_items)
                     window["-DELETE_SELECTED-"].update(disabled=not has_items)
+                    window["-OPEN_FILE-"].update(disabled=not has_items)
                     sg.popup(f"'{sel_name}' deleted.")
+
+    # ── Open File ──────────────────────────────────────────────────────────────
+    elif event == "-OPEN_FILE-":
+        if values["-ANALYSIS_LIST-"]:
+            sel_name = values["-ANALYSIS_LIST-"][0]
+            path = _analysis_path(sel_name)
+            if os.path.exists(path):
+                try:
+                    if sys.platform == "win32":
+                        os.startfile(path)
+                    elif sys.platform == "darwin":
+                        subprocess.Popen(["open", path])
+                    else:
+                        subprocess.Popen(["xdg-open", path])
+                except Exception as e:
+                    sg.popup_error(f"Could not open file: {e}")
+            else:
+                sg.popup_error(f"File not found: {path}")
 
 window.close()
