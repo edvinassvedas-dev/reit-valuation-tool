@@ -1,15 +1,16 @@
 # REIT Valuation Tool
 ![App Interface](images/screenshot.png)
 
-A Python desktop application for multi-model REIT valuation, combining three methodologies simultaneously with scenario analysis, sensitivity tables, and a local file-based database.
+A Python desktop app for multi-model REIT valuation, combining three methodologies simultaneously with scenario analysis, sensitivity tables, and a local file-based database.
 
 ---
 
 ## Overview
 
-The tool was built to support structured investment analysis of Real Estate Investment Trusts. It runs three independent valuation models side by side — DDM, AFFO DCF, and NAV — and produces a weighted cross-model summary that can be adjusted based on the REIT type. All analyses are saved as individual JSON files in a local `reit_db/` directory.
+The tool was built to support structured investment analysis of Real Estate Investment Trusts. Runs three independent valuation models side by side — DDM, AFFO DCF, and NAV — and produces a weighted cross-model summary that can be adjusted based on the REIT type. All analyses are saved as individual JSON files in a local `reit_db/` directory.
 
 ---
+
 ## Models
 
 ### 1. Two-Stage Dividend Discount Model (DDM)
@@ -32,16 +33,16 @@ The tool was built to support structured investment analysis of Real Estate Inve
 - Premium / discount to market price
 
 ---
+## Project
 
-## Weighting Guide
-
-| REIT Type | Recommended Weighting |
-|---|---|
-| Property-heavy (core, net lease) | NAV 50–60%, AFFO DCF 30%, DDM 10–20% |
-| Dividend-focused (mREITs, high-yield) | DDM 40–50%, AFFO DCF 30%, NAV 20–30% |
-| Balanced (residential, diversified) | Equal weights (33/34/33) |
-
-NAV should carry more weight when the portfolio consists of readily appraised assets (apartments, industrial, retail) and when the REIT is in an operational transition where current cash flows understate intrinsic value. DDM deserves more weight when dividend sustainability and growth are the primary investment thesis.
+```
+reit_valuation_app.py    # Entry point — GUI, layout, event loop
+schema.py                # Input field definitions and validation
+models.py                # Pure math (DDM, AFFO DCF, NAV)
+db.py                    # JSON persistence
+tests/                   # pytest tests. Run with: pytest tests/
+reit_db/                 # Saved analyses (created on first run)
+```
 
 ---
 
@@ -49,12 +50,14 @@ NAV should carry more weight when the portfolio consists of readily appraised as
 ```
 Python 3.9+
 FreeSimpleGUI
+pytest (for tests)
 ```
 ---
 
+
 ## Database
 
-**Local JSON database** — each analysis is saved as an individual `.json` file in `reit_db/`; analyses can be saved, loaded, deleted, and opened in the system editor from the GUI
+**Local JSON database** — each analysis is saved as an individual `.json` file in `reit_db/`. From the GUI you can save, load, delete, open the JSON file, or open the database folder.
 
 **Database fields:**
 | Field | Description |
@@ -87,11 +90,23 @@ FreeSimpleGUI
 
 ## Notes
 
-- The AFFO DCF can return negative equity values for highly leveraged REITs with low near-term AFFO — this is mathematically correct and represents the model's assessment that equity has no residual value at the given WACC. It is not a bug.
-- Margin of Safety (MoS) displays `—` when intrinsic price is negative or zero.
+- The AFFO DCF can return negative equity values for highly leveraged REITs with low near-term AFFO — this is mathematically correct and represents the model's assessment that equity has no residual value at the given WACC. Negative intrinsic values render in red; MoS and upside display `—` since both are undefined at non-positive intrinsic.
+- Required fields (shares, DPS, AFFO, GAV, projection years) must be positive — the app validates on Calculate and reports the offending field.
 - Cap rate sensitivity requires the NOI field to be populated.
-- Weights do not need to sum to 100 — the weighted average normalises automatically.
+- Weights do not need to sum to 100 — the weighted average normalises automatically and a status-bar notice appears if any model returned no result.
 - In DDM, to run a single-stage model set Stage 1 Growth = Stage 2 Terminal Growth for whichever scenario you want to treat as single-stage. (You can mix: e.g., use two-stage for best case and single-stage logic for worst case within the same calculation.)
+---
+
+## Weighting Guide
+
+| REIT Type | Recommended Weighting |
+|---|---|
+| Property-heavy (core, net lease) | NAV 50–60%, AFFO DCF 30%, DDM 10–20% |
+| Dividend-focused (mREITs, high-yield) | DDM 40–50%, AFFO DCF 30%, NAV 20–30% |
+| Balanced (residential, diversified) | Equal weights (33/34/33) |
+
+NAV should carry more weight when the portfolio consists of readily appraised assets (apartments, industrial, retail) and when the REIT is in an operational transition where current cash flows understate intrinsic value. DDM deserves more weight when dividend sustainability and growth are the primary investment thesis.
+
 ---
 
 ## License
