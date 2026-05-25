@@ -504,13 +504,10 @@ while True:
                 render_scenario(window, f"DDM_{sc.upper()}", price, inp.market_price)
 
             # Dividend coverage
-            if inp.dps > 0:
-                affo_ps = inp.affo / inp.shares
-                cov = affo_ps / inp.dps
-                window["-DDM_COV-"].update(
-                    f"{cov:.2f}x", text_color="green" if cov >= 1.0 else "red")
-            else:
-                window["-DDM_COV-"].update("—")
+            affo_ps = inp.affo / inp.shares
+            cov = affo_ps / inp.dps
+            window["-DDM_COV-"].update(
+                f"{cov:.2f}x", text_color="green" if cov >= 1.0 else "red")
 
             # AFFO DCF
             affo_prices = {}
@@ -539,11 +536,12 @@ while True:
                         window[uk].update(f"{u:+.1f}%",
                                           text_color="green" if u > 0 else "red")
                     else:
-                        window[uk].update("—")
+                        window[uk].update("—", text_color=sg.theme_text_color())
             else:
                 window["-NAV_CAP_RATE-"].update("—")
                 for _, (nk, uk) in zip(CAP_RATE_STEPS, CAP_SENS_KEYS):
-                    _set_dash(window, nk, uk)
+                    window[nk].update("—")
+                    window[uk].update("—", text_color=sg.theme_text_color())
 
             # NAV vs market
             _, navs = nav_sensitivity(inp.gav, inp.nav_debt, inp.nav_other, inp.shares)
@@ -557,10 +555,10 @@ while True:
                     window[uk].update(f"{u:+.1f}%",
                                       text_color="green" if u > 0 else "red")
             else:
-                window["-NAV_PREMIUM-"].update("—")
+                window["-NAV_PREMIUM-"].update("—", text_color=sg.theme_text_color())
                 for (nk, uk), nav_val in zip(NAV_SENS_KEYS, navs):
                     window[nk].update(f"${nav_val:.2f}")
-                    window[uk].update("—")
+                    window[uk].update("—", text_color=sg.theme_text_color())
 
             # Summary + wght avg
             renorm_warned = False

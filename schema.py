@@ -8,10 +8,10 @@ def gui_key(field_name: str) -> str:
 
 @dataclass
 class Inputs:
-    shares:               float = field(metadata={"default": ""})
+    shares:               float = field(metadata={"default": "", "positive": True})
     market_price: Optional[float] = field(metadata={"default": "", "optional": True})
-    dps:                  float = field(metadata={"default": ""})
-    ddm_stage1_years:     int   = field(metadata={"default": "5",   "int": True})
+    dps:                  float = field(metadata={"default": "", "positive": True})
+    ddm_stage1_years:     int   = field(metadata={"default": "5",   "int": True, "positive": True})
 
     ddm_worst_growth:     float = field(metadata={"default": "2"})
     ddm_worst_terminal:   float = field(metadata={"default": "1.5"})
@@ -23,10 +23,10 @@ class Inputs:
     ddm_best_terminal:    float = field(metadata={"default": "2.5"})
     ddm_best_rate:        float = field(metadata={"default": "7"})
 
-    affo:                 float = field(metadata={"default": ""})
+    affo:                 float = field(metadata={"default": "", "positive": True})
     affo_debt:            float = field(metadata={"default": ""})
     affo_cash:            float = field(metadata={"default": ""})
-    affo_years:           int   = field(metadata={"default": "10", "int": True})
+    affo_years:           int   = field(metadata={"default": "10", "int": True, "positive": True})
     affo_worst_growth:    float = field(metadata={"default": "1"})
     affo_worst_wacc:      float = field(metadata={"default": "9"})
     affo_worst_terminal:  float = field(metadata={"default": "1.5"})
@@ -37,7 +37,7 @@ class Inputs:
     affo_best_wacc:       float = field(metadata={"default": "7"})
     affo_best_terminal:   float = field(metadata={"default": "2.5"})
 
-    gav:                  float = field(metadata={"default": ""})
+    gav:                  float = field(metadata={"default": "", "positive": True})
     nav_debt:             float = field(metadata={"default": ""})
     nav_other:            float = field(metadata={"default": "0"})
     noi:        Optional[float] = field(metadata={"default": "", "optional": True})
@@ -63,15 +63,19 @@ class Inputs:
             raw = (values.get(gui_key(f.name), "") or "").strip()
             optional = f.metadata.get("optional", False)
             is_int   = f.metadata.get("int", False)
+            positive = f.metadata.get("positive", False)
             if not raw:
                 if optional:
                     kwargs[f.name] = None
                     continue
                 raise ValueError(f"{f.name} is required")
             try:
-                kwargs[f.name] = int(float(raw)) if is_int else float(raw)
+                val = int(float(raw)) if is_int else float(raw)
             except ValueError:
                 raise ValueError(f"{f.name}: '{raw}' is not a number")
+            if positive and val <= 0:
+                raise ValueError(f"{f.name} must be greater than zero (got {val})")
+            kwargs[f.name] = val
         return cls(**kwargs)
 
 
