@@ -25,6 +25,7 @@ def _base_payload(**overrides):
     return payload
 
 
+# =Happy paths
 
 def test_from_window_all_defaults_with_minimal_required():
     inp = Inputs.from_window(_base_payload())
@@ -59,6 +60,7 @@ def test_from_window_int_field_accepts_float_string():
     assert isinstance(inp.ddm_stage1_years, int)
 
 
+# =Error paths
 
 def test_from_window_missing_required_field_names_it():
     payload = _base_payload(**{"-SHARES-": ""})
@@ -84,6 +86,7 @@ def test_from_window_optional_whitespace_only_returns_none():
     assert inp.noi is None
 
 
+# =Scenario helpers
 
 def test_ddm_scenario_returns_decimals_for_base():
     inp = Inputs.from_window(_base_payload())
@@ -97,6 +100,7 @@ def test_affo_scenario_returns_decimals_for_worst():
     assert (g, w, t) == (0.01, 0.09, 0.015)
 
 
+# =Derived constants
 
 def test_defaults_cover_every_inputs_field():
     expected = {gui_key(f.name) for f in fields(Inputs)} | {"-ANALYSIS_NAME-", "-NOTES-"}

@@ -86,6 +86,7 @@ def _build_sorted_rows(database, sort_state):
              for r in database]
     non_empty = [p for p in pairs if p[1][col]]
     empty = [p for p in pairs if not p[1][col]]
+    # Date col (1) sorts directly; name col (0) is case-insensitive.
     non_empty.sort(key=lambda p: p[1][col] if col == 1 else p[1][col].lower(),
                    reverse=(direction == "desc"))
     pairs = non_empty + empty

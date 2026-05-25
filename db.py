@@ -1,9 +1,3 @@
-"""JSON-file persistence for analyses. No GUI dependency.
-
-Schema definitions (field list, metadata) live in schema.py; this module
-only owns reading, writing, and deleting files.
-"""
-
 import glob
 import json
 import os

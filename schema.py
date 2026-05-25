@@ -1,11 +1,3 @@
-"""Single source of truth for the input schema.
-
-The Inputs dataclass declares every numeric field the app cares about, with
-per-field metadata (default value, optional, integer). DEFAULTS, OPTIONAL,
-INT_FIELDS, and PERSISTED_FIELDS are derived from fields(Inputs) so adding a
-new field requires only one edit here.
-"""
-
 from dataclasses import dataclass, field, fields
 from typing import Optional
 
@@ -14,12 +6,8 @@ def gui_key(field_name: str) -> str:
     return f"-{field_name.upper()}-"
 
 
-# `default` is the initial string shown in the GUI widget.
-# `optional=True` means an empty string parses to None.
-# `int=True` means the value parses as int rather than float.
 @dataclass
 class Inputs:
-    """Parsed snapshot of every numeric input."""
     shares:               float = field(metadata={"default": ""})
     market_price: Optional[float] = field(metadata={"default": "", "optional": True})
     dps:                  float = field(metadata={"default": ""})
@@ -70,7 +58,6 @@ class Inputs:
 
     @classmethod
     def from_window(cls, values):
-        """Parse all widget values. Raises ValueError naming the bad field."""
         kwargs = {}
         for f in fields(cls):
             raw = (values.get(gui_key(f.name), "") or "").strip()
@@ -88,17 +75,13 @@ class Inputs:
         return cls(**kwargs)
 
 
-# Derived constants. Built once at import.
-
 PERSISTED_FIELDS = [f.name for f in fields(Inputs)] + ["notes"]
 
-# Default string values for every GUI widget, including non-Inputs fields.
 DEFAULTS = {gui_key(f.name): f.metadata.get("default", "") for f in fields(Inputs)}
 DEFAULTS["-ANALYSIS_NAME-"] = ""
 DEFAULTS["-NOTES-"] = ""
 
 
-# Documentation embedded into each saved JSON file.
 _META = {
     "_meta": {
         "analysis_name":    "User-defined label for this analysis",
