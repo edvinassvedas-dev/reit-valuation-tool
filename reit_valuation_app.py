@@ -78,12 +78,16 @@ def set_status(window, msg, level="info"):
 # =DB table=
 
 _TABLE_HEADINGS = ["Analysis Name", "Date"]
+_SEARCH_PLACEHOLDER = "Search..."
 
 
-def _build_sorted_rows(database, sort_state):
+def _build_sorted_rows(database, sort_state, search=""):
     col, direction = sort_state["col"], sort_state["dir"]
+    raw = search.strip()
+    term = "" if raw == _SEARCH_PLACEHOLDER else raw.lower()
     pairs = [(r, [r.get("analysis_name", ""), r.get("analysis_date", "")])
-             for r in database]
+             for r in database
+             if not term or term in r.get("analysis_name", "").lower()]
     non_empty = [p for p in pairs if p[1][col]]
     empty = [p for p in pairs if not p[1][col]]
     # Date col (1) sorts directly; name col (0) is case-insensitive.
@@ -143,7 +147,7 @@ NAV_SENS_KEYS = [
 ]
 
 
-# =GUI=
+# ==GUI=
 
 try:
     sg.theme("Reddit")
@@ -191,7 +195,7 @@ shared_top = [
 # =Notes=
 notes_col = [
     [sg.Text("Notes", font=("Helvetica", 11, "bold"))],
-    [sg.Multiline(key="-NOTES-", size=(40, 15))],
+    [sg.Multiline(key="-NOTES-", size=(40, 18))],
 ]
 
 # =DDM=
@@ -368,6 +372,7 @@ action_col = [
 # =Saved Analyses=
 saved_col = [
     [sg.Text("Saved Analyses", font=("Helvetica", 11, "bold"))],
+    [sg.Input("Search...", key="-SEARCH-", enable_events=True, expand_x=True, text_color="grey")],
     [sg.Table(
         values=[],
         headings=_TABLE_HEADINGS,
@@ -414,7 +419,18 @@ layout = [
     ],
 ]
 
-window = sg.Window("REIT Valuation", layout, size=(1300, 790), resizable=True, finalize=True)
+window = sg.Window("REIT Valuation", layout, size=(1300, 805), resizable=True, finalize=True)
+
+def _search_focus_in(event):
+    if window["-SEARCH-"].get() == _SEARCH_PLACEHOLDER:
+        window["-SEARCH-"].update("", text_color=sg.theme_text_color())
+
+def _search_focus_out(event):
+    if window["-SEARCH-"].get() == "":
+        window["-SEARCH-"].update(_SEARCH_PLACEHOLDER, text_color="grey")
+
+window["-SEARCH-"].Widget.bind("<FocusIn>", _search_focus_in)
+window["-SEARCH-"].Widget.bind("<FocusOut>", _search_focus_out)
 
 
 # event loop=
@@ -430,7 +446,7 @@ def refresh_saved_list():
             + "\n".join(f"  • {f}" for f in skipped),
             title="Database Load Warning",
         )
-    displayed, rows = _build_sorted_rows(records, sort_state)
+    displayed, rows = _build_sorted_rows(records, sort_state, window["-SEARCH-"].get())
     window["-ANALYSIS_TABLE-"].update(values=rows)
     _update_sort_indicators(window, sort_state)
     has_items = bool(displayed)
@@ -470,10 +486,19 @@ while True:
             else:
                 sort_state["col"] = col
                 sort_state["dir"] = "desc" if col == 1 else "asc"
-            displayed_records, rows = _build_sorted_rows(loaded_database, sort_state)
+            displayed_records, rows = _build_sorted_rows(loaded_database, sort_state, values.get("-SEARCH-", ""))
             window["-ANALYSIS_TABLE-"].update(values=rows)
             _update_sort_indicators(window, sort_state)
         continue
+
+    # =Search filter=
+    if event == "-SEARCH-":
+        displayed_records, rows = _build_sorted_rows(loaded_database, sort_state, values["-SEARCH-"])
+        window["-ANALYSIS_TABLE-"].update(values=rows)
+        has_items = bool(displayed_records)
+        window["-LOAD_SELECTED-"].update(disabled=not has_items)
+        window["-DELETE_SELECTED-"].update(disabled=not has_items)
+        window["-OPEN_FILE-"].update(disabled=not has_items)
 
     # =Reset
     if event == "Reset":
