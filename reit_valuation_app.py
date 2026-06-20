@@ -1,7 +1,9 @@
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import FreeSimpleGUI as sg
 
@@ -77,7 +79,7 @@ def set_status(window, msg, level="info"):
 
 # =DB table=
 
-_TABLE_HEADINGS = ["Analysis Name", "Date"]
+_TABLE_HEADINGS = ["Analysis Name", "Date", "Location"]
 _SEARCH_PLACEHOLDER = "Search..."
 
 
@@ -85,12 +87,11 @@ def _build_sorted_rows(database, sort_state, search=""):
     col, direction = sort_state["col"], sort_state["dir"]
     raw = search.strip()
     term = "" if raw == _SEARCH_PLACEHOLDER else raw.lower()
-    pairs = [(r, [r.get("analysis_name", ""), r.get("analysis_date", "")])
+    pairs = [(r, [r.get("analysis_name", ""), r.get("analysis_date", ""), r.get("_location", "")])
              for r in database
              if not term or term in r.get("analysis_name", "").lower()]
     non_empty = [p for p in pairs if p[1][col]]
     empty = [p for p in pairs if not p[1][col]]
-    # Date col (1) sorts directly; name col (0) is case-insensitive.
     non_empty.sort(key=lambda p: p[1][col] if col == 1 else p[1][col].lower(),
                    reverse=(direction == "desc"))
     pairs = non_empty + empty
@@ -106,6 +107,13 @@ def _update_sort_indicators(window, sort_state):
             tree.heading(f"#{i+1}", text=text)
     except Exception:
         pass
+
+
+def _selected_record(values, records):
+    sel = values.get("-ANALYSIS_TABLE-", [])
+    if sel and 0 <= sel[0] < len(records):
+        return records[sel[0]]
+    return None
 
 
 # =Result keys
@@ -378,7 +386,7 @@ saved_col = [
         headings=_TABLE_HEADINGS,
         key="-ANALYSIS_TABLE-",
         auto_size_columns=False,
-        col_widths=[30, 14],
+        col_widths=[19, 10, 12],
         justification="left",
         num_rows=12,
         enable_events=True,
@@ -616,7 +624,15 @@ while True:
             set_status(window, "Please enter an analysis name", "warn")
         else:
             target_name = name
-            if os.path.exists(analysis_path(name)):
+            folder = sg.popup_get_folder("Save location:", default_path=DB_DIR)
+            if folder is None:
+                folder = DB_DIR
+            else:
+                new_sub = sg.popup_get_text("Subfolder name (optional):", title="Subfolder")
+                if new_sub and new_sub.strip():
+                    folder = os.path.join(folder, new_sub.strip())
+                    os.makedirs(folder, exist_ok=True)
+            if os.path.exists(analysis_path(name, folder)):
                 new_name = sg.popup_get_text(
                     f"'{name}' already exists. Enter a new name:", title="Rename")
                 if not new_name or new_name == name:
@@ -629,7 +645,7 @@ while True:
                           for k in PERSISTED_FIELDS}
                 record["notes"] = record["notes"].strip()
                 try:
-                    save_analysis(target_name, record)
+                    save_analysis(target_name, record, directory=folder)
                     set_status(window, f"Saved '{target_name}'", "success")
                     loaded_database, displayed_records = refresh_saved_list()
                 except Exception as e:
@@ -649,9 +665,8 @@ while True:
 
     # =Load selected=
     elif event == "-LOAD_SELECTED-":
-        sel = values.get("-ANALYSIS_TABLE-", [])
-        if sel and 0 <= sel[0] < len(displayed_records):
-            a = displayed_records[sel[0]]
+        a = _selected_record(values, displayed_records)
+        if a:
             window["-ANALYSIS_NAME-"].update(a.get("analysis_name", ""))
             for k in PERSISTED_FIELDS:
                 window[f"-{k.upper()}-"].update(a.get(k, ""))
@@ -659,14 +674,20 @@ while True:
 
     # =Delete selected=
     elif event == "-DELETE_SELECTED-":
-        sel = values.get("-ANALYSIS_TABLE-", [])
-        if sel and 0 <= sel[0] < len(displayed_records):
-            sel_name = displayed_records[sel[0]].get("analysis_name", "")
+        a = _selected_record(values, displayed_records)
+        if a:
+            sel_name = a.get("analysis_name", "")
             confirm = sg.popup_yes_no(
                 f"Delete analysis '{sel_name}'?", title="Confirm Delete")
             if confirm == "Yes":
                 try:
-                    if delete_analysis(sel_name):
+                    sel_path = a.get("_path", "")
+                    if delete_analysis(sel_path):
+                        folder = Path(sel_path).parent
+                        if str(folder) != DB_DIR:
+                            if sg.popup_yes_no(f"Also delete subfolder '/{folder.name}/'?",
+                                               title="Delete Subfolder") == "Yes":
+                                shutil.rmtree(folder)
                         loaded_database, displayed_records = refresh_saved_list()
                         set_status(window, f"Deleted '{sel_name}'", "success")
                     else:
@@ -676,10 +697,9 @@ while True:
 
     # =Open File=
     elif event == "-OPEN_FILE-":
-        sel = values.get("-ANALYSIS_TABLE-", [])
-        if sel and 0 <= sel[0] < len(displayed_records):
-            sel_name = displayed_records[sel[0]].get("analysis_name", "")
-            path = analysis_path(sel_name)
+        a = _selected_record(values, displayed_records)
+        if a:
+            path = a.get("_path", "")
             if os.path.exists(path):
                 try:
                     open_path(path)
@@ -691,7 +711,9 @@ while True:
     # =Open Folder=
     elif event == "-OPEN_DIR-":
         try:
-            open_path(DB_DIR)
+            a = _selected_record(values, displayed_records)
+            folder = str(Path(a.get("_path", DB_DIR)).parent) if a else DB_DIR
+            open_path(folder)
         except Exception as e:
             sg.popup_error(f"Could not open folder: {e}")
 
