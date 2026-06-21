@@ -578,7 +578,7 @@ while True:
 
             # NAV vs market
             _, navs = nav_sensitivity(inp.gav, inp.nav_debt, inp.nav_other, inp.shares)
-            if inp.market_price:
+            if inp.market_price and nav_price != 0:
                 premium = (inp.market_price - nav_price) / nav_price * 100
                 window["-NAV_PREMIUM-"].update(
                     f"{premium:+.1f}%", text_color="red" if premium > 0 else "green")
