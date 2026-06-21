@@ -626,12 +626,11 @@ while True:
             target_name = name
             folder = sg.popup_get_folder("Save location:", default_path=DB_DIR)
             if folder is None:
-                folder = DB_DIR
-            else:
-                new_sub = sg.popup_get_text("Subfolder name (optional):", title="Subfolder")
-                if new_sub and new_sub.strip():
-                    folder = os.path.join(folder, new_sub.strip())
-                    os.makedirs(folder, exist_ok=True)
+                continue
+            new_sub = sg.popup_get_text("Subfolder name (optional):", title="Subfolder")
+            if new_sub and new_sub.strip():
+                folder = os.path.join(folder, new_sub.strip())
+                os.makedirs(folder, exist_ok=True)
             if os.path.exists(analysis_path(name, folder)):
                 new_name = sg.popup_get_text(
                     f"'{name}' already exists. Enter a new name:", title="Rename")
