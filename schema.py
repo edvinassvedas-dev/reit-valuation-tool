@@ -9,7 +9,7 @@ def gui_key(field_name: str) -> str:
 @dataclass
 class Inputs:
     shares:               float = field(metadata={"default": "", "positive": True})
-    market_price: Optional[float] = field(metadata={"default": "", "optional": True})
+    market_price: Optional[float] = field(metadata={"default": "", "optional": True, "positive": True})
     dps:                  float = field(metadata={"default": "", "positive": True})
     ddm_stage1_years:     int   = field(metadata={"default": "5",   "int": True, "positive": True})
 

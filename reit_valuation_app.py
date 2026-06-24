@@ -22,7 +22,7 @@ from schema import Inputs, DEFAULTS, PERSISTED_FIELDS, gui_key
 
 def _set_dash(window, *keys):
     for k in keys:
-        window[k].update("—")
+        window[k].update("—", text_color=sg.theme_text_color())
 
 
 def render_scenario(window, prefix, intrinsic, market_price):
@@ -35,7 +35,7 @@ def render_scenario(window, prefix, intrinsic, market_price):
         _set_dash(window, mk, uk)
         return
     window[pk].update(f"${intrinsic:.2f}", text_color=sg.theme_text_color())
-    if market_price:
+    if market_price is not None:
         m = mos(intrinsic, market_price)
         u = upside_pct(intrinsic, market_price)
         color = "green" if u > 0 else "red"
@@ -51,14 +51,14 @@ def render_sum_cell(window, pk, uk, price, market_price):
         return
     if price <= 0:
         window[pk].update(f"${price:.2f}", text_color="red")
-        window[uk].update("—")
+        window[uk].update("—", text_color=sg.theme_text_color())
         return
     window[pk].update(f"${price:.2f}", text_color=sg.theme_text_color())
-    if market_price:
+    if market_price is not None:
         u = upside_pct(price, market_price)
         window[uk].update(f"{u:+.1f}%", text_color="green" if u > 0 else "red")
     else:
-        window[uk].update("—")
+        window[uk].update("—", text_color=sg.theme_text_color())
 
 
 # =Status field=
@@ -564,7 +564,7 @@ while True:
                     nav_cr = nav_from_cap_rate(
                         inp.noi, cr, inp.nav_debt, inp.nav_other, inp.shares)
                     window[nk].update(f"${nav_cr:.2f}")
-                    if inp.market_price:
+                    if inp.market_price is not None:
                         u = upside_pct(nav_cr, inp.market_price)
                         window[uk].update(f"{u:+.1f}%",
                                           text_color="green" if u > 0 else "red")
@@ -578,7 +578,7 @@ while True:
 
             # NAV vs market
             _, navs = nav_sensitivity(inp.gav, inp.nav_debt, inp.nav_other, inp.shares)
-            if inp.market_price and nav_price != 0:
+            if inp.market_price is not None and nav_price != 0:
                 premium = (inp.market_price - nav_price) / nav_price * 100
                 window["-NAV_PREMIUM-"].update(
                     f"{premium:+.1f}%", text_color="red" if premium > 0 else "green")
@@ -635,6 +635,9 @@ while True:
                 new_name = sg.popup_get_text(
                     f"'{name}' already exists. Enter a new name:", title="Rename")
                 if not new_name or new_name == name:
+                    target_name = None
+                elif os.path.exists(analysis_path(new_name, folder)):
+                    set_status(window, f"'{new_name}' already exists — save cancelled", "warn")
                     target_name = None
                 else:
                     target_name = new_name
