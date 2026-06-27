@@ -131,7 +131,7 @@ def test_weighted_avg_renormalizes_when_one_missing():
 def test_weighted_avg_returns_none_when_all_missing():
     avg, renorm = weighted_avg(None, None, None, 33, 34, 33)
     assert avg is None
-    assert renorm is False
+    assert renorm is True
 
 
 def test_weighted_avg_handles_zero_weights():

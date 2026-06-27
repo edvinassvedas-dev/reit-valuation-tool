@@ -24,8 +24,8 @@ class Inputs:
     ddm_best_rate:        float = field(metadata={"default": "7"})
 
     affo:                 float = field(metadata={"default": "", "positive": True})
-    affo_debt:            float = field(metadata={"default": ""})
-    affo_cash:            float = field(metadata={"default": ""})
+    affo_debt:            float = field(metadata={"default": "0"})
+    affo_cash:            float = field(metadata={"default": "0"})
     affo_years:           int   = field(metadata={"default": "10", "int": True, "positive": True})
     affo_worst_growth:    float = field(metadata={"default": "1"})
     affo_worst_wacc:      float = field(metadata={"default": "9"})

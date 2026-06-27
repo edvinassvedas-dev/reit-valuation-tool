@@ -444,9 +444,6 @@ window["-SEARCH-"].Widget.bind("<FocusOut>", _search_focus_out)
 # event loop=
 
 def refresh_saved_list():
-    """Reload DB, rebuild sorted table rows, sync button-enabled state.
-    Returns (records, displayed_records) where displayed_records is the
-    sort-aligned record list for index-based lookups from the table."""
     records, _, skipped = load_database()
     if skipped:
         sg.popup_error(
