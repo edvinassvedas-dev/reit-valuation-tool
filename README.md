@@ -21,9 +21,9 @@ The tool was built to support structured investment analysis of Real Estate Inve
 
 ### 2. AFFO-Based DCF
 - Discounted cash flow using Adjusted Funds from Operations
-- Accounts for debt and cash in the equity bridge
+- Discounts the AFFO equity flow at cost of equity (sourced from DDM rate); no net-debt bridge
 - 10-year projection horizon (configurable)
-- Three scenarios with independent WACC and terminal growth assumptions
+- Three scenarios with independent growth and terminal assumptions
 
 ### 3. Net Asset Value (NAV)
 - NAV per share from Gross Asset Value, debt, and other liabilities
@@ -71,11 +71,11 @@ pytest (for tests)
 | `ddm_[worst/base/best]_terminal` | Stage 2 terminal growth rate per scenario |
 | `ddm_[worst/base/best]_rate` | Discount rate per scenario |
 | `affo` | AFFO (millions, TTM) |
-| `affo_debt` | Total debt (millions) |
-| `affo_cash` | Cash & equivalents (millions) |
+| `affo_debt` | Total debt (millions) — vestigial, retained for back-compat |
+| `affo_cash` | Cash & equivalents (millions) — vestigial, retained for back-compat |
 | `affo_years` | DCF projection years |
 | `affo_[worst/base/best]_growth` | AFFO growth rate per scenario |
-| `affo_[worst/base/best]_wacc` | WACC per scenario |
+| `affo_[worst/base/best]_wacc` | WACC per scenario — vestigial; AFFO-DCF discount rate comes from `ddm_*_rate` |
 | `affo_[worst/base/best]_terminal` | Terminal growth rate per scenario |
 | `gav` | Gross Asset Value (millions) |
 | `nav_debt` | Total debt for NAV (millions) |
@@ -90,7 +90,6 @@ pytest (for tests)
 
 ## Notes
 
-- The AFFO DCF can return negative equity values for highly leveraged REITs with low near-term AFFO — this is mathematically correct and represents the model's assessment that equity has no residual value at the given WACC. Negative intrinsic values render in red; MoS and upside display `—` since both are undefined at non-positive intrinsic.
 - Required fields (shares, DPS, AFFO, GAV, projection years) must be positive — the app validates on Calculate and reports the offending field.
 - Cap rate sensitivity requires the NOI field to be populated.
 - Weights do not need to sum to 100 — the weighted average normalises automatically and a status-bar notice appears if any model returned no result.
