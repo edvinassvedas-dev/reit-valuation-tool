@@ -56,6 +56,11 @@ class Inputs:
                 getattr(self, f"affo_{sc}_wacc") / 100,
                 getattr(self, f"affo_{sc}_terminal") / 100)
 
+    def affo_equity_scenario(self, sc):
+        return (getattr(self, f"affo_{sc}_growth") / 100,
+                getattr(self, f"ddm_{sc}_rate") / 100,
+                getattr(self, f"affo_{sc}_terminal") / 100)
+
     @classmethod
     def from_window(cls, values):
         kwargs = {}
@@ -97,11 +102,11 @@ _META = {
         "ddm_*_terminal":   "Stage 2 perpetual growth rate (must be < discount rate)",
         "ddm_*_rate":       "Discount rate as a percentage",
         "affo":             "AFFO in millions",
-        "affo_debt":        "Total debt in millions for AFFO DCF equity bridge",
-        "affo_cash":        "Cash & equivalents in millions",
+        "affo_debt":        "Total debt in millions (vestigial — retained for back-compat; not used by AFFO-DCF)",
+        "affo_cash":        "Cash & equivalents in millions (vestigial — retained for back-compat; not used by AFFO-DCF)",
         "affo_years":       "Projection horizon for AFFO DCF",
         "affo_*_growth":    "AFFO growth rate per scenario as a percentage",
-        "affo_*_wacc":      "WACC per scenario as a percentage (must exceed terminal)",
+        "affo_*_wacc":      "WACC per scenario as a percentage (vestigial — retained for back-compat; AFFO-DCF now uses ddm_*_rate as cost of equity)",
         "affo_*_terminal":  "AFFO terminal growth rate per scenario as a percentage",
         "gav":              "Gross Asset Value in millions",
         "nav_debt":         "Total debt for NAV calculation",

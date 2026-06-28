@@ -8,7 +8,7 @@ from pathlib import Path
 import FreeSimpleGUI as sg
 
 from models import (
-    ddm_two_stage, affo_dcf_calculate, nav_calculate, nav_from_cap_rate,
+    ddm_two_stage, affo_dcf_calculate, affo_dcf_equity, nav_calculate, nav_from_cap_rate,
     nav_sensitivity, mos, upside_pct, weighted_avg,
 )
 from db import (
@@ -542,10 +542,8 @@ while True:
             # AFFO DCF
             affo_prices = {}
             for sc in ("worst", "base", "best"):
-                g, w, t = inp.affo_scenario(sc)
-                price = affo_dcf_calculate(
-                    inp.affo, inp.affo_debt, inp.affo_cash, inp.shares,
-                    inp.affo_years, g, w, t)
+                g, coe, t = inp.affo_equity_scenario(sc)
+                price = affo_dcf_equity(inp.affo, inp.shares, inp.affo_years, g, coe, t)
                 affo_prices[sc] = price
                 render_scenario(window, f"AFFO_{sc.upper()}", price, inp.market_price)
 

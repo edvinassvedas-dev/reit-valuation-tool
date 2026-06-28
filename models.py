@@ -27,6 +27,19 @@ def affo_dcf_calculate(affo, debt, cash, shares, years, growth_rate, wacc, termi
     return (ev - debt + cash) / shares
 
 
+def affo_dcf_equity(affo, shares, years, growth_rate, cost_of_equity, terminal_growth):
+    if cost_of_equity <= terminal_growth:
+        raise ValueError("Cost of equity must be greater than terminal growth rate.")
+    if shares <= 0:
+        raise ValueError("Shares outstanding must be greater than zero.")
+    projected = [affo * (1 + growth_rate) ** i for i in range(1, years + 1)]
+    discounted = [v / (1 + cost_of_equity) ** i for i, v in enumerate(projected, 1)]
+    tv = projected[-1] * (1 + terminal_growth) / (cost_of_equity - terminal_growth)
+    dtv = tv / (1 + cost_of_equity) ** years
+    equity = sum(discounted) + dtv
+    return equity / shares
+
+
 def nav_calculate(gross_asset_value, total_debt, other_liabilities, shares):
     if shares <= 0:
         raise ValueError("Shares outstanding must be greater than zero.")

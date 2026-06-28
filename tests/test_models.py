@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import (
-    ddm_two_stage, affo_dcf_calculate, nav_calculate, nav_from_cap_rate,
+    ddm_two_stage, affo_dcf_calculate, affo_dcf_equity, nav_calculate, nav_from_cap_rate,
     nav_sensitivity, mos, upside_pct, weighted_avg,
 )
 
@@ -65,6 +65,27 @@ def test_affo_dcf_debt_reduces_equity():
     no_debt = affo_dcf_calculate(100, 0,   0, 100, 10, 0.03, 0.08, 0.02)
     debt    = affo_dcf_calculate(100, 500, 0, 100, 10, 0.03, 0.08, 0.02)
     assert debt == pytest.approx(no_debt - 5.0, abs=0.001)
+
+
+# =AFFO DCF equity (corrected)
+
+def test_affo_dcf_equity_coe_must_exceed_terminal():
+    with pytest.raises(ValueError, match="Cost of equity"):
+        affo_dcf_equity(100, 100, 10, 0.03, 0.02, 0.05)
+
+
+def test_affo_dcf_equity_zero_shares_raises():
+    with pytest.raises(ValueError, match="Shares"):
+        affo_dcf_equity(100, 0, 10, 0.03, 0.08, 0.02)
+
+
+def test_affo_dcf_equity_zero_leverage_equivalence():
+    # With debt=0, cash=0, and WACC == CoE, both methods must agree exactly.
+    # Reference values from VNA base case (handoff §5.1).
+    result = affo_dcf_equity(1541, 848, 5, 0.035, 0.09, 0.0175)
+    legacy = affo_dcf_calculate(1541, 0, 0, 848, 5, 0.035, 0.09, 0.0175)
+    assert result == pytest.approx(legacy)
+    assert result == pytest.approx(27.486, abs=0.001)
 
 
 # =NAV=
